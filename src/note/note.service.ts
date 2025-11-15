@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nest
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { PrismaService } from 'src/prisma.service';
+import { PrismaClientKnownRequestError } from 'generated/prisma/runtime/library';
 
 @Injectable()
 export class NoteService {
@@ -50,11 +51,40 @@ export class NoteService {
     return note;
   }
 
-  update(id: number, updateNoteDto: UpdateNoteDto) {
-    return `This action updates a #${id} note`;
+  async update(id: number, updateNoteDto: UpdateNoteDto, userId: number) {
+    const note = await this.prismaService.note.findFirst({
+      where: { id },
+    });
+
+    if (!note) {
+      throw new NotFoundException('Not found.');
+    }
+
+    if (note?.userId !== userId) {
+      throw new ForbiddenException('Not allowed!');
+    }
+
+    const updated = await this.prismaService.note.update({
+      where: {
+        id,
+      },
+      data: updateNoteDto,
+    });
+
+    return updated;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} note`;
+  async remove(id: number, userId: number) {
+    try {
+      return await this.prismaService.note.delete({ where: { id, userId } });
+    } catch (err: unknown) {
+      if (err instanceof PrismaClientKnownRequestError) {
+        if (err.code === 'P2025') {
+          throw new ForbiddenException();
+        }
+      }
+
+      throw err;
+    }
   }
 }
