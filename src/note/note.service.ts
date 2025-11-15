@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { PrismaService } from 'src/prisma.service';
@@ -21,12 +21,33 @@ export class NoteService {
     return note;
   }
 
-  findAll() {
-    return `This action returns all note`;
+  async findAll(
+    { skip, take }: { skip: number; take: number },
+    userId: number,
+  ) {
+    const notes = await this.prismaService.note.findMany({
+      skip,
+      take,
+      where: {
+        userId,
+      },
+    });
+
+    return notes;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} note`;
+  async findOne(id: number, userId: number) {
+    const note = await this.prismaService.note.findFirst({ where: { id } });
+
+    if (!note) {
+      throw new NotFoundException('Not found.');
+    }
+
+    if (note?.userId !== userId) {
+      throw new ForbiddenException('Not allowed!');
+    }
+
+    return note;
   }
 
   update(id: number, updateNoteDto: UpdateNoteDto) {
